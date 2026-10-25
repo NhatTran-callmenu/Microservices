@@ -1,0 +1,39 @@
+
+# Node.js
+node_modules/
+npm-debug.log*
+coverage/
+dist/
+build/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Credentials
+*.pem
+*.key
+*.p12
+*.pfx
+*credentials*.json
+*secret*.json
+
+# Logs
+logs/
+*.log
+
+# Database exports
+*.dump
+*.bak
+*.sql.gz
+
+# OS and IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.temp

@@ -1,0 +1,166 @@
+
+services:
+
+  # ==========================================
+  # 1. AUTH SERVICE
+  # ==========================================
+  auth-service:
+    build:
+      context: ..
+      dockerfile: services/auth-service/Dockerfile
+    env_file:
+      - ../services/auth-service/.env
+    environment:
+      PORT: "3001"
+      DB_HOST: ecommerce_postgres
+      GRPC_PORT: "50051"
+    restart: unless-stopped
+
+  # ==========================================
+  # 2. CUSTOMER SERVICE
+  # ==========================================
+  customer-service:
+    build:
+      context: ..
+      dockerfile: services/customer-service/Dockerfile
+    env_file:
+      - ../services/customer-service/.env
+    environment:
+      PORT: "3002"
+      DB_HOST: ecommerce_postgres
+      GRPC_PORT: "50052"
+    restart: unless-stopped
+
+  # ==========================================
+  # 3. PRODUCT SERVICE
+  # ==========================================
+  product-service:
+    build:
+      context: ..
+      dockerfile: services/product-service/Dockerfile
+    env_file:
+      - ../services/product-service/.env
+    environment:
+      PORT: "3003"
+      DB_HOST: ecommerce_postgres
+      GRPC_PORT: "50053"
+    restart: unless-stopped
+
+  # ==========================================
+  # 4. ORDER SERVICE
+  # ==========================================
+  order-service:
+    build:
+      context: ..
+      dockerfile: services/order-service/Dockerfile
+    env_file:
+      - ../services/order-service/.env
+    environment:
+      PORT: "3004"
+      DB_HOST: ecommerce_postgres
+      PRODUCT_SERVICE_URL: http://product-service:3003
+      CUSTOMER_SERVICE_URL: http://customer-service:3002
+      CUSTOMER_GRPC_HOST: customer-service:50052
+      PRODUCT_GRPC_HOST: product-service:50053
+      KAFKA_BROKERS: kafka:9092
+      AUTH_GRPC_HOST: auth-service:50051
+    depends_on:
+      - product-service
+      - customer-service
+      - kafka
+    restart: unless-stopped
+
+  # ==========================================
+  # 5. SHIPMENT SERVICE
+  # ==========================================
+  shipment-service:
+    build:
+      context: ../services/shipment-service
+    env_file:
+      - ../services/shipment-service/.env
+    environment:
+      PORT: "3005"
+      DB_HOST: ecommerce_postgres
+      ORDER_SERVICE_URL: http://order-service:3004
+      KAFKA_BROKERS: kafka:9092
+    depends_on:
+      - order-service
+      - kafka
+    restart: unless-stopped
+
+  # ==========================================
+  # 6. API GATEWAY
+  # ==========================================
+  api-gateway:
+    build:
+      context: ../api-gateway
+    env_file:
+      - ../api-gateway/.env
+    environment:
+      PORT: "3000"
+      REDIS_URL: redis://ecommerce-redis:6379
+
+      AUTH_SERVICE_HOST: auth-service
+      CUSTOMER_SERVICE_HOST: customer-service
+      PRODUCT_SERVICE_HOST: product-service
+      ORDER_SERVICE_HOST: order-service
+      SHIPMENT_SERVICE_HOST: shipment-service
+
+      AUTH_GRPC_HOST: auth-service:50051
+      CUSTOMER_GRPC_HOST: customer-service:50052
+      PRODUCT_GRPC_HOST: product-service:50053
+
+    ports:
+      - "3100:3000"
+
+    depends_on:
+      - auth-service
+      - customer-service
+      - product-service
+      - order-service
+      - shipment-service
+
+    restart: unless-stopped
+
+  # ==========================================
+  # 7. APACHE KAFKA - KRAFT MODE
+  # ==========================================
+  kafka:
+    image: apache/kafka:3.9.1
+    hostname: kafka
+
+    environment:
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
+
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+
+    restart: unless-stopped
+
+# ==========================================
+# SHARED DOCKER NETWORK
+# ==========================================
+networks:
+  default:
+    name: ecommerce-shared
+    external: true
+
+# ==========================================
+# KAFKA DATA VOLUME
+# ==========================================
+volumes:
+  kafka_data:
